@@ -94,11 +94,11 @@ class structureSelector:
 	
 	def matrix_candidate(self, u, y, nb, na, level, nonlinear=[0,0,0,0,0], root=False):
 		if len(na) != u.shape[0]:
-			 print("Número de entradas incompativel:", len(na),'e',	u.shape[0])
-			 return np.array([])
+			print("Número de entradas incompativel:", len(na),'e',	u.shape[0])
+			return np.array([])
 		elif len(nb) != y.shape[0]:
-			 print("Número de saids incompativel:", len(nb),' e',	y.shape[0])
-			 return np.array([])
+			print("Número de saids incompativel:", len(nb),' e',	y.shape[0])
+			return np.array([])
 		
 		def exp(x):
 			return np.exp(x/8)
