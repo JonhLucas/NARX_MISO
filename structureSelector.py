@@ -226,17 +226,21 @@ class structureSelector:
 		return P, selected
 
 	def predict(self, u, y, theta, model, nb, na, index):
+		#Condição inicial
 		yest = np.zeros(y.shape)
 		d = max(max(na), max(nb))
-		yest[:d] = y[:d] #padding
+		yest[:, :d] = y[:, :d] #padding
 
-		s = ()
-		for i in range(y.shape[0]):
-			s += symbols('Y'+str(i+1)+'.1:{}'.format(nb[i]+1))
+		s = []
+		nb = np.array(nb)
+		for i in range(nb.shape[0]):
+			for j in range(nb[i]):
+				s += [symbols('Y'+str(i+1)+'.'+str(j+1))]
 	
 		for i in range(u.shape[0]):
 			s += symbols('U'+str(i+1)+'.1:{}'.format(na[i]+1))
-	
+		
+		print('--------s: ', s)
 		for k in range(d, y.shape[1]):
 			num = np.array([])
 			for i in range(y.shape[0]):
@@ -244,7 +248,6 @@ class structureSelector:
 			for i in range(u.shape[0]):
 				num = np.hstack((num, np.flip(u[i, k-na[i]:k])))
 			dicionario = dict(zip(s, num))
-			dicionario['1'] = 1
-			aux = np.array([m.evalf(subs=dicionario) for m in model])
+			aux = np.array([1 if m == 1 else m.evalf(subs=dicionario) for m in model])
 			yest[index, k] = aux @ theta
 		return yest[index, :]
