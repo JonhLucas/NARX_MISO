@@ -1,3 +1,4 @@
+#%%
 import numpy as np
 import pandas as pd
 import sympy as sp
@@ -26,13 +27,14 @@ class structureSelector:
 	
 	functions = [sp.sin, sp.cos, sp.log, sp.tanh, exp]
 
-	def symbolic_regressors(self, nb, na, level, nonlinear=[0,0,0,0,0], root=False):
+	def symbolic_regressors(self, nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=0):
 		nb = np.array(nb)
 		na = np.array(na)
 		ny = np.sum(nb)
-		nx = np.sum(na)
+		nx = np.sum(na - delay)
 		
 		size = nx + ny
+		print(size)
 	
 		ry = sp.zeros(1, ny)
 		p = 0
@@ -52,9 +54,9 @@ class structureSelector:
 		ru = sp.zeros(1, nx)
 		e = 0
 		for i in range(na.shape[0]):
-			for j in range(0, na[i]):
-				ru[e+j] = sp.symbols("U"+str(i+1)+"."+str(j+1))
-			e += na[i]
+			for j in range(0, na[i]-delay):
+				ru[e+j] = sp.symbols("U"+str(i+1)+"."+str(j+1+delay))
+			e += (na[i] - delay)
 	
 		uNonlinear = []
 		for i in range(len(nonlinear)):
@@ -92,7 +94,7 @@ class structureSelector:
 	
 		return final
 	
-	def matrix_candidate(self, u, y, nb, na, level, nonlinear=[0,0,0,0,0], root=False):
+	def matrix_candidate(self, u, y, nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=0):
 		if len(na) != u.shape[0]:
 			print("Número de entradas incompativel:", len(na),'e',	u.shape[0])
 			return np.array([])
@@ -107,10 +109,11 @@ class structureSelector:
 				return 0
 			else:
 				return np.sqrt(x)
+		#apagar
 		functions = [np.sin, np.cos, np.log, np.tanh, exp, squareRootM]
-		
+	
 		M = []
-		nx = np.sum(na)
+		nx = np.sum(np.array(na) - delay)
 		ny = np.sum(nb)
 		size = nx + ny + len(nb) * np.sum(nonlinear) + len(na) * np.sum(nonlinear)
 
@@ -134,11 +137,13 @@ class structureSelector:
 		regU = np.zeros((nx, H - begin))
 		k = 0
 		for i in range(len(na)):
-			for j in range(1, na[i] + 1):
+			for j in range(1+delay, na[i] + 1):
 				#regU[i*2 + j - 1] = u[i][begin-j:-j]
+				#print(j)
 				regU[k] = u[i][begin-j:-j]
 				k += 1
-	
+		#print("*************Size:", regU.shape)
+		#print(regU)
 		for j in range(len(nonlinear)):
 			if nonlinear[j]:
 				for i in range(len(na)):
@@ -229,7 +234,13 @@ class structureSelector:
 		#Condição inicial
 		yest = np.zeros(y.shape)
 		d = max(max(na), max(nb))
-		yest[:, :d] = y[:, :d] #padding
+		yest = y.copy()
+		yest[index, :] = 0
+		yest[index, :d] = y[index, :d] #padding
+
+		'''plt.plot(yest.T, label=["1","2"])
+		plt.legend()
+		plt.show()'''
 
 		s = []
 		nb = np.array(nb)
@@ -240,7 +251,7 @@ class structureSelector:
 		for i in range(u.shape[0]):
 			s += symbols('U'+str(i+1)+'.1:{}'.format(na[i]+1))
 		
-		print('--------s: ', s)
+		#print('--------s: ', s)
 		for k in range(d, y.shape[1]):
 			num = np.array([])
 			for i in range(y.shape[0]):
@@ -251,3 +262,46 @@ class structureSelector:
 			aux = np.array([1 if m == 1 else m.evalf(subs=dicionario) for m in model])
 			yest[index, k] = aux @ theta
 		return yest[index, :]
+	
+	def oneStepForward(self, u, y, theta, model, nb, na, index):
+		#Condição inicial
+		yest = np.zeros(y.shape)
+		d = max(max(na), max(nb))
+		yest = y.copy()
+		yest[index, :] = 0
+		yest[index, :d] = y[index, :d] #padding
+
+		s = []
+		nb = np.array(nb)
+		for i in range(nb.shape[0]):
+			for j in range(nb[i]):
+				s += [symbols('Y'+str(i+1)+'.'+str(j+1))]
+	
+		for i in range(u.shape[0]):
+			s += symbols('U'+str(i+1)+'.1:{}'.format(na[i]+1))
+		
+		#print('--------s: ', s)
+		for k in range(d, y.shape[1]):
+			num = np.array([])
+			for i in range(y.shape[0]):
+				num = np.hstack((num, np.flip(y[i, k-nb[i]:k])))
+			for i in range(u.shape[0]):
+				num = np.hstack((num, np.flip(u[i, k-na[i]:k])))
+			dicionario = dict(zip(s, num))
+			aux = np.array([1 if m == 1 else m.evalf(subs=dicionario) for m in model])
+			yest[index, k] = aux @ theta
+		return yest[index, :]
+
+#%%
+'''na = [5]
+nb = [2,2]
+level = 2
+ss = structureSelector()
+d = 3
+s = ss.symbolic_regressors(nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=d)
+pprint(s)
+u = np.arange(1,1001,1).reshape((1,-1))
+y = np.zeros((2,1000))
+v = ss.matrix_candidate(u, y, nb, na, level, delay=d)
+print(s.shape, v.shape)'''
+# %%
