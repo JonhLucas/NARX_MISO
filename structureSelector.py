@@ -34,7 +34,7 @@ class structureSelector:
 		nx = np.sum(na - delay)
 		
 		size = nx + ny
-		print(size)
+		#print(size)
 	
 		ry = sp.zeros(1, ny)
 		p = 0
@@ -71,7 +71,7 @@ class structureSelector:
 		result = []
 		aux = np.expand_dims(l1, axis=1)
 		result.append(l1)
-		print(size, l1.shape)
+		#print(size, l1.shape)
 		num = l1.shape[0]
 
 		for j in range(level-1):
@@ -238,12 +238,17 @@ class structureSelector:
 		yest[index, :] = 0
 		yest[index, :d] = y[index, :d] #padding
 
+		#
+		nb = np.array(nb)
+		nb[nb == 0] = 1
+		na = np.array(na)
+		na[na == 0] = 1
+
 		'''plt.plot(yest.T, label=["1","2"])
 		plt.legend()
 		plt.show()'''
 
 		s = []
-		nb = np.array(nb)
 		for i in range(nb.shape[0]):
 			for j in range(nb[i]):
 				s += [symbols('Y'+str(i+1)+'.'+str(j+1))]
@@ -273,6 +278,10 @@ class structureSelector:
 
 		s = []
 		nb = np.array(nb)
+		nb[nb == 0] = 1
+		na = np.array(na)
+		na[na == 0] = 1
+		
 		for i in range(nb.shape[0]):
 			for j in range(nb[i]):
 				s += [symbols('Y'+str(i+1)+'.'+str(j+1))]
