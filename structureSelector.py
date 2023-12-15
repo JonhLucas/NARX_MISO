@@ -2,29 +2,27 @@
 import numpy as np
 import pandas as pd
 import sympy as sp
-from sympy import symbols, pprint
+from sympy import symbols, pprint, Function
 from methods.utils.utilities import *
 
+class sqrtM(Function):
+	@classmethod
+	def eval(cls, x):
+		if x.is_Number:
+			#print(type(x))
+			return sp.re(sp.sqrt(x))
+           
 class structureSelector:
 
-	def exp(x):
+	def exp(self, x):
 		return sp.exp(x/8)
-	
-	def squareRootM(x):
-		if x <= 0:
-			return 0
-		else:
-			return sp.sqrt(x)
 		
-	def logM(x):
+	def logM(self, x):
 		if x < 0:
 			return -np.inf
 		else:
 			return sp.log(x)
-	
-	def isqrt(x):
-		return 1/sp.sqrt(x)
-	
+
 	functions = [sp.sin, sp.cos, sp.log, sp.tanh, exp]
 
 	def symbolic_regressors(self, nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=0):
@@ -33,9 +31,7 @@ class structureSelector:
 		ny = np.sum(nb)
 		nx = np.sum(na - delay)
 		
-		size = nx + ny
-		#print(size)
-	
+		#Regressores da saída
 		ry = sp.zeros(1, ny)
 		p = 0
 		for i in range(nb.shape[0]):
@@ -44,25 +40,26 @@ class structureSelector:
 			p += nb[i]
 
 		yNonlinear = []
-	
+		#Funções não linear aplicadas a y
 		for i in range(len(nonlinear)):
 			if(nonlinear[i]):
 				yNonlinear = yNonlinear + [self.functions[i](sp.symbols("Y" + str(s+1) + ".1")) for s in range(nb.shape[0])]
-		
+		#junção
 		regY = np.array(ry[0:] + yNonlinear)
 		
+		#Regressores de entrada
 		ru = sp.zeros(1, nx)
 		e = 0
 		for i in range(na.shape[0]):
 			for j in range(0, na[i]-delay):
 				ru[e+j] = sp.symbols("U"+str(i+1)+"."+str(j+1+delay))
 			e += (na[i] - delay)
-	
+		#Funções não lineares aplicadas a entrada
 		uNonlinear = []
 		for i in range(len(nonlinear)):
 			if(nonlinear[i]):
 				uNonlinear = uNonlinear + [self.functions[i](sp.symbols("U" + str(s+1) + ".1")) for s in range(na.shape[0])]
-
+		#junção
 		regU = np.array(ru[0:] + uNonlinear)
 		
 		l1 = np.hstack((regY, regU))
@@ -88,9 +85,10 @@ class structureSelector:
 	
 		if root:
 			r = []
-			r = r + [sp.sqrt(sp.symbols("Y" + str(s+1) + ".1")) for s in range(nb.shape[0])] + [sp.sqrt(sp.symbols("U" + str(s+1) + ".1")) for s in range(na.shape[0])]
+			r = r + [sqrtM(sp.symbols("Y" + str(s+1) + ".1")) for s in range(nb.shape[0])] + [sqrtM(sp.symbols("U" + str(s+1) + ".1")) for s in range(na.shape[0])]
+			
 			final = np.hstack((final, r))
-			#print([sp.sqrt(sp.symbols("U" + str(s+1) + ".1")) for s in range(na.shape[0])])
+			print(r, final)
 	
 		return final
 	
@@ -104,13 +102,9 @@ class structureSelector:
 		
 		def exp(x):
 			return np.exp(x/8)
-		def squareRootM(x):
-			if x <= 0:
-				return 0
-			else:
-				return np.sqrt(x)
+
 		#apagar
-		functions = [np.sin, np.cos, np.log, np.tanh, exp, squareRootM]
+		functions = [np.sin, np.cos, np.log, np.tanh, exp]
 	
 		M = []
 		nx = np.sum(np.array(na) - delay)
@@ -173,6 +167,7 @@ class structureSelector:
 			uu = u[:, begin-1:-1].copy()
 			uu[uu < 0] = 0
 			x = np.vstack((yy,uu))
+			x[x < 0] = 0
 			r = np.sqrt(x)
 			final = np.vstack((final, r))
 		return final
@@ -265,7 +260,9 @@ class structureSelector:
 				num = np.hstack((num, np.flip(u[i, k-na[i]:k])))
 			dicionario = dict(zip(s, num))
 			aux = np.array([1 if m == 1 else m.evalf(subs=dicionario) for m in model])
-			yest[index, k] = aux @ theta
+			#print(aux)
+			#print(np.real(aux[-1]), type(aux[-1]))
+			yest[index, k] = aux.real @ theta
 		return yest[index, :]
 	
 	def oneStepForward(self, u, y, theta, model, nb, na, index):
@@ -302,13 +299,15 @@ class structureSelector:
 		return yest[index, :]
 
 #%%
-'''na = [5]
+'''
+na = [5]
 nb = [2,2]
 level = 2
 ss = structureSelector()
 d = 3
-s = ss.symbolic_regressors(nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=d)
+s = ss.symbolic_regressors(nb, na, level, nonlinear=[0,0,0,0,0], root=True, delay=d)
 pprint(s)
+print(s[-1].evalf(subs={symbols('U1.1'):-3}))
 u = np.arange(1,1001,1).reshape((1,-1))
 y = np.zeros((2,1000))
 v = ss.matrix_candidate(u, y, nb, na, level, delay=d)
