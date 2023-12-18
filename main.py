@@ -134,7 +134,7 @@ v2 = np.ones(uVal.shape)
 v1[v1 < 0] = 0
 v2[v2 < 0] = 0
 v2[:100] = 0
-#yVal = np.vstack((v1.T, v2.T))
+
 yVal = np.vstack((v1, v2))
 
 z = np.zeros(yVal.shape)

@@ -47,7 +47,7 @@ class structureSelector:
 		#derivada
 		if diff:
 			f = Function('frac{x}{dt}')
-			print('Derivada:', f(sp.symbols("Y")))
+			#print('Derivada:', f(sp.symbols("Y")))
 		#junção
 		regY = np.array(ry[0:] + yNonlinear)
 		
@@ -232,7 +232,7 @@ class structureSelector:
 	def predict(self, u, y, theta, model, nb, na, index):
 		#Condição inicial
 		yest = np.zeros(y.shape)
-		print(y.shape)
+		print("Simulação livre")
 		d = max(max(na), max(nb))
 		yest = y.copy()
 		yest[index, :] = 0
@@ -272,7 +272,7 @@ class structureSelector:
 	
 	def oneStepForward(self, u, y, theta, model, nb, na, index):
 		#Condição inicial
-		print("oneStepForward")
+		#print("oneStepForward")
 		yest = np.zeros(y.shape)
 		d = max(max(na), max(nb))
 		yest = y.copy()
@@ -292,7 +292,7 @@ class structureSelector:
 		for i in range(u.shape[0]):
 			s += symbols('U'+str(i+1)+'.1:{}'.format(na[i]+1))
 		
-		print('--------s: ', s)
+		#print('--------s: ', s)
 		for k in range(d, y.shape[1]):
 			num = np.array([])
 			for i in range(y.shape[0]):
