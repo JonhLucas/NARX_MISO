@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 import sympy as sp
-from sympy import symbols, pprint, Function
+from sympy import symbols, pprint, Function, Derivative
 from methods.utils.utilities import *
 
 class sqrtM(Function):
@@ -25,7 +25,7 @@ class structureSelector:
 
 	functions = [sp.sin, sp.cos, sp.log, sp.tanh, exp]
 
-	def symbolic_regressors(self, nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=0):
+	def symbolic_regressors(self, nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=0, diff=False):
 		nb = np.array(nb)
 		na = np.array(na)
 		ny = np.sum(nb)
@@ -44,6 +44,10 @@ class structureSelector:
 		for i in range(len(nonlinear)):
 			if(nonlinear[i]):
 				yNonlinear = yNonlinear + [self.functions[i](sp.symbols("Y" + str(s+1) + ".1")) for s in range(nb.shape[0])]
+		#derivada
+		if diff:
+			f = Function('frac{x}{dt}')
+			print('Derivada:', f(sp.symbols("Y")))
 		#junção
 		regY = np.array(ry[0:] + yNonlinear)
 		
@@ -88,11 +92,11 @@ class structureSelector:
 			r = r + [sqrtM(sp.symbols("Y" + str(s+1) + ".1")) for s in range(nb.shape[0])] + [sqrtM(sp.symbols("U" + str(s+1) + ".1")) for s in range(na.shape[0])]
 			
 			final = np.hstack((final, r))
-			print(r, final)
+			#print(r, final)
 	
 		return final
 	
-	def matrix_candidate(self, u, y, nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=0):
+	def matrix_candidate(self, u, y, nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=0, diff=False):
 		if len(na) != u.shape[0]:
 			print("Número de entradas incompativel:", len(na),'e',	u.shape[0])
 			return np.array([])
@@ -228,6 +232,7 @@ class structureSelector:
 	def predict(self, u, y, theta, model, nb, na, index):
 		#Condição inicial
 		yest = np.zeros(y.shape)
+		print(y.shape)
 		d = max(max(na), max(nb))
 		yest = y.copy()
 		yest[index, :] = 0
@@ -267,6 +272,7 @@ class structureSelector:
 	
 	def oneStepForward(self, u, y, theta, model, nb, na, index):
 		#Condição inicial
+		print("oneStepForward")
 		yest = np.zeros(y.shape)
 		d = max(max(na), max(nb))
 		yest = y.copy()
@@ -286,7 +292,7 @@ class structureSelector:
 		for i in range(u.shape[0]):
 			s += symbols('U'+str(i+1)+'.1:{}'.format(na[i]+1))
 		
-		#print('--------s: ', s)
+		print('--------s: ', s)
 		for k in range(d, y.shape[1]):
 			num = np.array([])
 			for i in range(y.shape[0]):
@@ -295,6 +301,7 @@ class structureSelector:
 				num = np.hstack((num, np.flip(u[i, k-na[i]:k])))
 			dicionario = dict(zip(s, num))
 			aux = np.array([1 if m == 1 else m.evalf(subs=dicionario) for m in model])
+			#print(aux, dicionario, num.shape, len(s), nb, na)
 			yest[index, k] = aux @ theta
 		return yest[index, :]
 
