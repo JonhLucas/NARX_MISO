@@ -46,8 +46,9 @@ class structureSelector:
 		#Aplicação da derivada
 		ds = []
 		if df:
-			f = Function('d')
-			ds = [f(sp.symbols(symbol + str(s+1) + ".1")) for s in range(n.shape[0])]
+			#f = Function('d')
+			#ds = [f(sp.symbols(symbol + str(s+1) + ".1")) for s in range(n.shape[0])]
+			ds = [sp.symbols("d(" + symbol + str(s+1) + ".1)") for s in range(n.shape[0])]
 		
 		#Junção
 		regS = np.array(r[0:] + sNonlinear + ds) #np.array(ry[0:] + yNonlinear)
@@ -137,8 +138,8 @@ class structureSelector:
 				return []
 			else:
 				dy = np.zeros((len(nb), H - begin))
-				print(ny, dy.shape, y.shape,y[:, begin-1:-1].shape)
-				dy = (y[:, begin:]-y[:, begin-1:-1])/dt
+				#print(ny, dy.shape, y.shape,y[:, begin-1:-1].shape)
+				dy = (y[:, begin-1:-1]-y[:, begin-2:-2])/dt
 				
 				regY = np.vstack((regY, dy))
 				'''plt.plot(regY[:,:100].T)
@@ -163,8 +164,8 @@ class structureSelector:
 				return []
 			else:
 				du = np.zeros((len(na), H - begin))
-				print(nx, du.shape, u.shape, u[:, begin-1:-1].shape)
-				du = (u[:, begin:]-u[:, begin-1:-1])/dt
+				#print(nx, du.shape, u.shape, u[:, begin-1:-1].shape)
+				du = (u[:, begin-1:-1]-u[:, begin-2:-2])/dt
 				
 				regU = np.vstack((regU, du))
 				
@@ -254,14 +255,14 @@ class structureSelector:
 			Jold = np.mean(np.square(y - (P @ theta)))#J[l]
 		return P, selected
 
-	def predict(self, u, y, theta, model, nb, na, index):
+	def predict(self, u, y, theta, model, nb, na, index, delay=1, diff=False, dt=0):
 		#Condição inicial
-		yest = np.zeros(y.shape)
+		#yest = np.zeros(y.shape)
 		print("Simulação livre")
 		d = max(max(na), max(nb))
 		yest = y.copy()
-		yest[index, :] = 0
-		yest[index, :d] = y[index, :d] #padding
+		yest[index, :] = 0 #Saída
+		#yest[index, :d] = y[index, :d] #padding
 
 		#
 		nb = np.array(nb)
@@ -269,33 +270,46 @@ class structureSelector:
 		na = np.array(na)
 		na[na == 0] = 1
 
-		'''plt.plot(yest.T, label=["1","2"])
-		plt.legend()
-		plt.show()'''
 
 		s = []
 		for i in range(nb.shape[0]):
 			for j in range(nb[i]):
 				s += [symbols('Y'+str(i+1)+'.'+str(j+1))]
-	
+		if diff:
+			for i in range(nb.shape[0]):
+				s += [symbols('d(Y'+str(i+1)+'.'+'1)')]
+
 		for i in range(u.shape[0]):
-			s += symbols('U'+str(i+1)+'.1:{}'.format(na[i]+1))
+			s += symbols('U'+str(i+1)+'.'+str(delay)+':{}'.format(na[i]+1))
+
+		if diff:
+			for i in range(na.shape[0]):
+				s += [symbols('d(U'+str(i+1)+'.'+'1)')]
+			du = np.zeros(u.shape)
+			du[:, d:] = (u[:, d-1:-1] - u[:, d-2:-2]) / dt
 		
-		#print('--------s: ', s)
+		print('--------s: ', s)
 		for k in range(d, y.shape[1]):
 			num = np.array([])
 			for i in range(y.shape[0]):
 				num = np.hstack((num, np.flip(yest[i, k-nb[i]:k])))
+			if diff:
+				dy = (yest[:, k-1] - yest[:, k-2]) / dt
+				#print(num.shape, dy.shape)
+				num = np.hstack((num, dy))
 			for i in range(u.shape[0]):
 				num = np.hstack((num, np.flip(u[i, k-na[i]:k])))
+			if diff:
+				num = np.hstack((num, du[:, k]))
 			dicionario = dict(zip(s, num))
+			#print(dicionario)
 			aux = np.array([1 if m == 1 else m.evalf(subs=dicionario) for m in model])
 			#print(aux)
 			#print(np.real(aux[-1]), type(aux[-1]))
 			yest[index, k] = aux.real @ theta
 		return yest[index, :]
 	
-	def oneStepForward(self, u, y, theta, model, nb, na, index):
+	def oneStepForward(self, u, y, theta, model, nb, na, index, diff=False, dt=0):
 		#Condição inicial
 		#print("oneStepForward")
 		yest = np.zeros(y.shape)
@@ -313,31 +327,48 @@ class structureSelector:
 		for i in range(nb.shape[0]):
 			for j in range(nb[i]):
 				s += [symbols('Y'+str(i+1)+'.'+str(j+1))]
-	
+		if diff:
+			for i in range(nb.shape[0]):
+				s += [symbols('d(Y'+str(i+1)+'.'+'1)')]
+		
 		for i in range(u.shape[0]):
 			s += symbols('U'+str(i+1)+'.1:{}'.format(na[i]+1))
+
+		if diff:
+			for i in range(na.shape[0]):
+				s += [symbols('d(U'+str(i+1)+'.'+'1)')]
 		
-		#print('--------s: ', s)
+			dy = np.zeros(y.shape)
+			dy[:, d:] = (y[:, d-1:-1] - y[:, d-2:-2]) / dt
+			du = np.zeros(u.shape)
+			du[:, d:] = (u[:, d-1:-1] - u[:, d-2:-2]) / dt
+		
+		#print('--------s: ', s, dy.shape)
 		for k in range(d, y.shape[1]):
 			num = np.array([])
 			for i in range(y.shape[0]):
 				num = np.hstack((num, np.flip(y[i, k-nb[i]:k])))
+			if diff:
+				num = np.hstack((num, dy[:, k]))
 			for i in range(u.shape[0]):
 				num = np.hstack((num, np.flip(u[i, k-na[i]:k])))
+			if diff:
+				num = np.hstack((num, du[:, k]))
 			dicionario = dict(zip(s, num))
+			#print(dicionario)
 			aux = np.array([1 if m == 1 else m.evalf(subs=dicionario) for m in model])
 			#print(aux, dicionario, num.shape, len(s), nb, na)
 			yest[index, k] = aux @ theta
 		return yest[index, :]
 
 #%%
-
+'''
 na = [5]
 nb = [1,1]
 level = 1
 ss = structureSelector()
 d = 4
-s = ss.symbolic_regressors(nb, na, level, nonlinear=[0,0,0,0,0], root=False, diff=True, delay=d)
+s = ss.symbolic_regressors(nb, na, level, nonlinear=[1,1,0,0,0], root=False, diff=True, delay=d)
 pprint(s)
 #%%
 
@@ -347,8 +378,20 @@ y = np.zeros((2,1000))
 y[0] = np.sin(u)
 y[1] = 2*u
 v = ss.matrix_candidate(u, y, nb, na, level, delay=d, diff=True, dt=0.1)
-#print(s.shape, v.shape)
-
-# %%
+print(len(s), v.shape)
+#%%
+output = 0
+pad = max(max(na), max(nb))
+psi, selected  = ss.semp(v.T, y[output, pad:], 3, 0.00001)
+theta = LSM(y[output, pad:], psi)
+model = s[selected]
+print(model, theta)
+#%%
+theta = []
+model = []
+index = 0
+t = ss.predict(u, y, theta, model, nb, na, index, diff=True, dt=0.1)
+#%%
 plt.plot(v[:,:100].T)
 plt.show()
+'''
