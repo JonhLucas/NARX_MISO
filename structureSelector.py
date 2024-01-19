@@ -97,7 +97,7 @@ class structureSelector:
 	def matrix_candidate(self, u, y, nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=0, diff=False, dt=0):
 		#Verificação inicial
 		if len(na) != u.shape[0]:
-			print("Número de entradas incompativel:", len(na),'e',	u.shape[0])
+			print("Número de entradas incompativel: S-", len(na),'e U-',	u.shape[0])
 			return np.array([])
 		elif len(nb) != y.shape[0]:
 			print("Número de saids incompativel:", len(nb),' e',	y.shape[0])
@@ -257,12 +257,16 @@ class structureSelector:
 
 	def predict(self, u, y, theta, model, nb, na, index, delay=1, diff=False, dt=0):
 		#Condição inicial
-		#yest = np.zeros(y.shape)
 		print("Simulação livre")
 		d = max(max(na), max(nb))
-		yest = y.copy()
-		yest[index, :] = 0 #Saída
-		#yest[index, :d] = y[index, :d] #padding
+		yest = np.zeros(y.shape)
+		#print('condições iniciais', yest[index, :d], y[index, :d])
+		yest[index, :d] = y[index, :d] #padding
+		if y.shape[0] > 1:
+			w = np.arange(0, y.shape[0], 1)
+			w = np.delete(w, index)
+			print(index, w)
+			yest[w, :] = y[w, :] 
 
 		#
 		nb = np.array(nb)
@@ -306,7 +310,15 @@ class structureSelector:
 			aux = np.array([1 if m == 1 else m.evalf(subs=dicionario) for m in model])
 			#print(aux)
 			#print(np.real(aux[-1]), type(aux[-1]))
-			yest[index, k] = aux.real @ theta
+			try:
+				yest[index, k] = aux.real @ theta
+			except ValueError:
+				print("Error:")
+				print(aux)
+			except Exception as err:
+				print(f"Unexpected {err=}, {type(err)=}")
+				print(aux)
+				
 		return yest[index, :]
 	
 	def oneStepForward(self, u, y, theta, model, nb, na, index, diff=False, dt=0):
