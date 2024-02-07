@@ -255,10 +255,12 @@ class structureSelector:
 			Jold = np.mean(np.square(y - (P @ theta)))#J[l]
 		return P, selected
 
-	def predict(self, u, y, theta, model, nb, na, index, delay=1, diff=False, dt=0):
+	def predict(self, u, y, theta, model, nb, na, index, delay=0, diff=False, dt=0):
 		#Condição inicial
 		print("Simulação livre")
 		d = max(max(na), max(nb))
+		d = max(d, delay)
+
 		yest = np.zeros(y.shape)
 		#print('condições iniciais', yest[index, :d], y[index, :d])
 		yest[index, :d] = y[index, :d] #padding
@@ -293,6 +295,7 @@ class structureSelector:
 			du[:, d:] = (u[:, d-1:-1] - u[:, d-2:-2]) / dt
 		
 		print('--------s: ', s)
+
 		for k in range(d, y.shape[1]):
 			num = np.array([])
 			for i in range(y.shape[0]):
@@ -302,11 +305,13 @@ class structureSelector:
 				#print(num.shape, dy.shape)
 				num = np.hstack((num, dy))
 			for i in range(u.shape[0]):
-				num = np.hstack((num, np.flip(u[i, k-na[i]:k])))
+				num = np.hstack((num, np.flip(u[i, k-na[i]:k-delay+1])))
 			if diff:
 				num = np.hstack((num, du[:, k]))
+
 			dicionario = dict(zip(s, num))
 			#print(dicionario)
+			#print(len(s), num.shape, k,  k-na[i], k-delay+1)
 			aux = np.array([1 if m == 1 else m.evalf(subs=dicionario) for m in model])
 			#print(aux)
 			#print(np.real(aux[-1]), type(aux[-1]))
