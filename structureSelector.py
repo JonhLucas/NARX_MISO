@@ -11,6 +11,13 @@ class sqrtM(Function):
 		if x.is_Number:
 			#print(type(x))
 			return sp.re(sp.sqrt(x))
+		
+class sign(Function):
+	@classmethod
+	def eval(cls, x):
+		if x.is_Number:
+			#print(type(x))
+			return np.sign(x)
 
 class d(Function):
 	@classmethod
@@ -22,13 +29,20 @@ class d(Function):
 
 
 class structureSelector:
+	def integrate(self, p, ts=0.1):
+		r = np.zeros(p.shape)
+		r[:, 0] = p[:, 0] * ts
+		#print(r[:, 0], p[:, 0])
+		for i in range(1, p.shape[1]):
+			r[:, i] = r[:, i-1] + p[:, i] * ts
+		return r
 
 	def exp(self, x):
 		return sp.exp(x/8)
 
-	functions = [sp.sin, sp.cos, sp.log, sp.tanh, exp]
+	functions = [sp.sin, sp.cos, sp.log, sp.tanh, sign]
 
-	def regressors(self, size, n, symbol="", nl=[0,0,0,0,0], df=False, d=0):
+	def regressors(self, size, n, symbol="", nl=[0,0,0,0,0], df=False, d=0, intg=False):
 		r = sp.zeros(1, size)
 		p = 0
 		#Regressores lineares
@@ -49,22 +63,28 @@ class structureSelector:
 			#f = Function('d')
 			#ds = [f(sp.symbols(symbol + str(s+1) + ".1")) for s in range(n.shape[0])]
 			ds = [sp.symbols("d(" + symbol + str(s+1) + ".1)") for s in range(n.shape[0])]
-		
+
+		#Aplicação da integral
+		Is = []
+		if intg:
+			Is = [sp.symbols("I(" + symbol + str(s+1) + ".1)") for s in range(n.shape[0])]
+		#print("integral", Is)
+
 		#Junção
-		regS = np.array(r[0:] + sNonlinear + ds) #np.array(ry[0:] + yNonlinear)
+		regS = np.array(r[0:] + sNonlinear + ds + Is) #np.array(ry[0:] + yNonlinear)
 		#print('Regressores gerados:', regS)
 		return regS
 
-	def symbolic_regressors(self, nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=0, diff=False):
+	def symbolic_regressors(self, nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=0, diff=False, intg=False):
 		nb = np.array(nb)
 		na = np.array(na)
 		ny = np.sum(nb)
 		nx = np.sum(na - delay)
 		
 		#regressores de saída
-		regY = self.regressors(ny, nb, "Y", nonlinear, diff)
+		regY = self.regressors(ny, nb, "Y", nonlinear, diff, 0, intg)
 		#regressores de entrada
-		regU = self.regressors(nx, na, "U", nonlinear, diff, delay)
+		regU = self.regressors(nx, na, "U", nonlinear, diff, delay, intg)
 		#regressores lineares
 		l1 = np.hstack((regY, regU))
 	
@@ -94,7 +114,7 @@ class structureSelector:
 	
 		return final
 	
-	def matrix_candidate(self, u, y, nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=0, diff=False, dt=0):
+	def matrix_candidate(self, u, y, nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=0, diff=False, dt=0, intg=False):
 		#Verificação inicial
 		if len(na) != u.shape[0]:
 			print("Número de entradas incompativel: S-", len(na),'e U-',	u.shape[0])
@@ -102,12 +122,12 @@ class structureSelector:
 		elif len(nb) != y.shape[0]:
 			print("Número de saids incompativel:", len(nb),' e',	y.shape[0])
 			return np.array([])
-		
+
 		def exp(x):
 			return np.exp(x/8)
 
 		#apagar
-		functions = [np.sin, np.cos, np.log, np.tanh, exp]
+		functions = [np.sin, np.cos, np.log, np.tanh, np.sign]
 	
 		#M = []
 		nx = np.sum(np.array(na) - delay)
@@ -142,8 +162,14 @@ class structureSelector:
 				dy = (y[:, begin-1:-1]-y[:, begin-2:-2])/dt
 				
 				regY = np.vstack((regY, dy))
-				'''plt.plot(regY[:,:100].T)
-				plt.show()'''
+		#integracao da saida
+		if intg:
+			iy = self.integrate(p=y, ts=dt)
+			'''
+			plt.plot(iy[:].T )
+			plt.show()
+			print(iy[:, begin:].shape, regY.shape)'''
+			regY = np.vstack((regY, iy[:, begin:]))
 
 		#regressores de entrada
 		regU = np.zeros((nx, H - begin))
@@ -166,11 +192,11 @@ class structureSelector:
 				du = np.zeros((len(na), H - begin))
 				#print(nx, du.shape, u.shape, u[:, begin-1:-1].shape)
 				du = (u[:, begin-1:-1]-u[:, begin-2:-2])/dt
-				
 				regU = np.vstack((regU, du))
-				
-				'''plt.plot(regU[:,:100].T)
-				plt.show()'''
+		#integracao da entrada
+		if intg:
+			iu = self.integrate(p=u, ts=dt)
+			regU = np.vstack((regU, iu[:, begin:]))
 
 		l1 = np.vstack((regY, regU))
 		result = []
@@ -255,7 +281,7 @@ class structureSelector:
 			Jold = np.mean(np.square(y - (P @ theta)))#J[l]
 		return P, selected
 
-	def predict(self, u, y, theta, model, nb, na, index, delay=0, diff=False, dt=0):
+	def predict(self, u, y, theta, model, nb, na, index, delay=0, diff=False, dt=0, intg=False):
 		#Condição inicial
 		print("Simulação livre")
 		d = max(max(na), max(nb))
@@ -284,6 +310,10 @@ class structureSelector:
 		if diff:
 			for i in range(nb.shape[0]):
 				s += [symbols('d(Y'+str(i+1)+'.'+'1)')]
+		if intg:
+			for i in range(nb.shape[0]):
+				s += [symbols('I(Y'+str(i+1)+'.'+'1)')]
+
 
 		for i in range(u.shape[0]):
 			s += symbols('U'+str(i+1)+'.'+str(delay)+':{}'.format(na[i]+1))
@@ -293,9 +323,17 @@ class structureSelector:
 				s += [symbols('d(U'+str(i+1)+'.'+'1)')]
 			du = np.zeros(u.shape)
 			du[:, d:] = (u[:, d-1:-1] - u[:, d-2:-2]) / dt
+
+		if intg:
+			for i in range(na.shape[0]):
+				s += [symbols('I(U'+str(i+1)+'.'+'1)')]
+			iu = np.zeros(u.shape)
+			iu[:, 0] = u[:, 0] * dt
+			for i in range(1, d):
+				iu[:, i] = iu[:, i-1] + u[:, i] * dt
 		
 		print('--------s: ', s)
-
+		iy = 0
 		for k in range(d, y.shape[1]):
 			num = np.array([])
 			for i in range(y.shape[0]):
@@ -304,10 +342,17 @@ class structureSelector:
 				dy = (yest[:, k-1] - yest[:, k-2]) / dt
 				#print(num.shape, dy.shape)
 				num = np.hstack((num, dy))
+			if intg:
+				iy = iy + yest[:, k-1] * dt
+				num = np.hstack((num, iy))
+
 			for i in range(u.shape[0]):
 				num = np.hstack((num, np.flip(u[i, k-na[i]:k-delay+1])))
 			if diff:
 				num = np.hstack((num, du[:, k]))
+			if intg:
+				iu[:, k] = iu[:, k-1] + u[:, k] * dt
+				num = np.hstack((num, iu[:, k]))
 
 			dicionario = dict(zip(s, num))
 			#print(dicionario)
@@ -326,7 +371,7 @@ class structureSelector:
 				
 		return yest[index, :]
 	
-	def oneStepForward(self, u, y, theta, model, nb, na, index, diff=False, dt=0):
+	def oneStepForward(self, u, y, theta, model, nb, na, index, diff=False, dt=0, intg=False):
 		#Condição inicial
 		#print("oneStepForward")
 		yest = np.zeros(y.shape)
@@ -347,7 +392,11 @@ class structureSelector:
 		if diff:
 			for i in range(nb.shape[0]):
 				s += [symbols('d(Y'+str(i+1)+'.'+'1)')]
-		
+		if intg:
+			for i in range(nb.shape[0]):
+				s += [symbols('I(Y'+str(i+1)+'.'+'1)')]
+			iy = self.integrate(y, dt)
+
 		for i in range(u.shape[0]):
 			s += symbols('U'+str(i+1)+'.1:{}'.format(na[i]+1))
 
@@ -359,6 +408,12 @@ class structureSelector:
 			dy[:, d:] = (y[:, d-1:-1] - y[:, d-2:-2]) / dt
 			du = np.zeros(u.shape)
 			du[:, d:] = (u[:, d-1:-1] - u[:, d-2:-2]) / dt
+
+		if intg:
+			for i in range(na.shape[0]):
+				s += [symbols('I(U'+str(i+1)+'.'+'1)')]
+			iu = self.integrate(u, dt)
+		
 		
 		#print('--------s: ', s, dy.shape)
 		for k in range(d, y.shape[1]):
@@ -367,10 +422,15 @@ class structureSelector:
 				num = np.hstack((num, np.flip(y[i, k-nb[i]:k])))
 			if diff:
 				num = np.hstack((num, dy[:, k]))
+			if intg:
+				num = np.hstack((num, iy[:, k]))
 			for i in range(u.shape[0]):
 				num = np.hstack((num, np.flip(u[i, k-na[i]:k])))
 			if diff:
 				num = np.hstack((num, du[:, k]))
+			if intg:
+				num = np.hstack((num, iu[:, k]))
+
 			dicionario = dict(zip(s, num))
 			#print(dicionario)
 			aux = np.array([1 if m == 1 else m.evalf(subs=dicionario) for m in model])
@@ -380,22 +440,30 @@ class structureSelector:
 
 #%%
 '''
-na = [5]
-nb = [1,1]
-level = 1
+na = [2]
+nb = [2,2]
+level = 2
 ss = structureSelector()
-d = 4
-s = ss.symbolic_regressors(nb, na, level, nonlinear=[1,1,0,0,0], root=False, diff=True, delay=d)
+d = 1
+s = ss.symbolic_regressors(nb, na, level, nonlinear=[0,0,0,0,0], root=False, diff=False, delay=d, intg=True)
 pprint(s)
+print(len(s))
 #%%
-
+na = [2]
+nb = [2,2]
+ss = structureSelector()
 #print(s[-1].evalf(subs={symbols('U1.1'):-3}))
-u = np.arange(1,1001,1).reshape((1,-1))/10
+u = np.arange(0,1000,1).reshape((1,-1))/10
 y = np.zeros((2,1000))
 y[0] = np.sin(u)
 y[1] = 2*u
-v = ss.matrix_candidate(u, y, nb, na, level, delay=d, diff=True, dt=0.1)
+dl = 1
+v = ss.matrix_candidate(u, y, nb, na, level, root=False, diff=False, delay=dl, intg=True, dt=0.1)
 print(len(s), v.shape)
+#%%
+plt.plot(np.sin(u).T)
+plt.plot(-np.cos(u).T)
+plt.show()
 #%%
 output = 0
 pad = max(max(na), max(nb))
@@ -410,5 +478,4 @@ index = 0
 t = ss.predict(u, y, theta, model, nb, na, index, diff=True, dt=0.1)
 #%%
 plt.plot(v[:,:100].T)
-plt.show()
-'''
+plt.show()'''
