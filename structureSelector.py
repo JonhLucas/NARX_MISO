@@ -51,8 +51,36 @@ class tanh10(Function):
 		if x.is_Number:
 			return sp.tanh(10 * x)
 
+class clip(Function):
+	m = 0 
+	n = 5 
+
+	@classmethod
+	def setLimit(cls, min_val, max_val):
+		cls.m = min_val
+		cls.n = max_val
+
+	@classmethod
+	def eval(cls, x):
+		if x.is_Number:
+			print(cls.m, cls.n)
+			return np.clip(x, cls.m, cls.n)
+	def __str__(self):
+		return f"c({self.args[0]})"
+		
 
 class structureSelector:
+	def __init__(self):
+		self.min = -1
+		self.max = 1
+
+	functions = [sp.sin, sp.cos, sp.log, sp.tanh, sign, tanh2, tanh5, tanh10, tanh05]
+	
+	def setLimits(self, min, max):
+		self.min = min
+		self.max = max
+		clip.setLimit(min, max)
+
 	def integrate(self, p, ts=0.1):
 		r = np.zeros(p.shape)
 		r[:, 0] = p[:, 0] * ts
@@ -64,22 +92,32 @@ class structureSelector:
 	def exp(self, x):
 		return sp.exp(x/8)
 
-	functions = [sp.sin, sp.cos, sp.log, sp.tanh, sign, tanh2, tanh5, tanh10, tanh05]
-
-	def regressors(self, size, n, symbol="", nl=[0,0,0,0,0], df=False, d=0, intg=False):
+	def regressors(self, size, n, symbol="", nl=[0,0,0,0,0,0,0,0,0], df=False, d=0, intg=False, ymodifier=[0,0]):
 		r = sp.zeros(1, size)
 		p = 0
 		#Regressores lineares
 		for i in range(n.shape[0]):
 			for j in range(0, n[i]-d):
-				r[p+j] = sp.symbols(symbol+str(i+1)+"."+str(j+1+d))
+				if ymodifier[0] == 0:
+					r[p+j] = sp.symbols(symbol+str(i+1)+"."+str(j+1+d))
+				else:
+					r[p+j] = clip(sp.symbols(symbol+str(i+1)+"."+str(j+1+d)))
 			p += n[i]-d
+		'''else:
+			print("y modificador")
+			for i in range(n.shape[0]):
+				for j in range(0, n[i]-d):
+					r[p+j] = clip(sp.symbols(symbol+str(i+1)+"."+str(j+1+d)))
+				p += n[i]-d'''
 
 		#Aplicação das funções não lineares
 		sNonlinear = []
 		for i in range(len(nl)):
-			if(nl[i]):
-				sNonlinear = sNonlinear + [self.functions[i](sp.symbols(symbol + str(s+1) + ".1")) for s in range(n.shape[0])]
+			for j in range(0, nl[i]):
+				if ymodifier[0] == 1:
+					sNonlinear = sNonlinear + [self.functions[i](clip(sp.symbols(symbol + str(s+1) + "." + str(j+1)))) for s in range(n.shape[0])]
+				else:
+					sNonlinear = sNonlinear + [self.functions[i](sp.symbols(symbol + str(s+1) + "." + str(j+1))) for s in range(n.shape[0])]
 		
 		#Aplicação da derivada
 		ds = []
@@ -99,14 +137,14 @@ class structureSelector:
 		#print('Regressores gerados:', regS)
 		return regS
 
-	def symbolic_regressors(self, nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=0, diff=False, intg=False):
+	def symbolic_regressors(self, nb, na, level, nonlinear=[0,0,0,0,0,0,0,0,0], root=False, delay=0, diff=False, intg=False, ymodifier=[0,0]):
 		nb = np.array(nb)
 		na = np.array(na)
 		ny = np.sum(nb)
 		nx = np.sum(na - delay)
 		
 		#regressores de saída
-		regY = self.regressors(ny, nb, "Y", nonlinear, diff, 0, intg)
+		regY = self.regressors(ny, nb, "Y", nonlinear, diff, 0, intg, ymodifier)
 		#regressores de entrada
 		regU = self.regressors(nx, na, "U", nonlinear, diff, delay, intg)
 		#regressores lineares
@@ -138,7 +176,7 @@ class structureSelector:
 	
 		return final
 	
-	def matrix_candidate(self, u, y, nb, na, level, nonlinear=[0,0,0,0,0], root=False, delay=0, diff=False, dt=0, intg=False):
+	def matrix_candidate(self, u, y, nb, na, level, nonlinear=[0,0,0,0,0,0,0,0,0], root=False, delay=0, diff=False, dt=0, intg=False, ymodifier=[0,0]):
 		#Verificação inicial
 		if len(na) != u.shape[0]:
 			print("Número de entradas incompativel: S-", len(na),'e U-',	u.shape[0])
@@ -147,9 +185,6 @@ class structureSelector:
 			print("Número de saids incompativel:", len(nb),' e',	y.shape[0])
 			return np.array([])
 
-		def exp(x):
-			return np.exp(x/8)
-		
 		def tanh05Numeric(x):
 			return np.tanh(0.5 * x)
 		
@@ -161,19 +196,23 @@ class structureSelector:
 		
 		def tanh10Numeric(x):
 			return np.tanh(10 * x)
-
-		#apagar
+		
+		def clipNumeric(x):
+			return np.clip(x, self.min, self.max)
+		
+		#conjunto de não linearidades
 		functions = [np.sin, np.cos, np.log, np.tanh, np.sign, tanh2Numeric, tanh5Numeric, tanh10Numeric, tanh05Numeric]
 	
-		#M = []
 		nx = np.sum(np.array(na) - delay)
 		ny = np.sum(nb)
-		#size = nx + ny + len(nb) * np.sum(nonlinear) + len(na) * np.sum(nonlinear)
 
-		H = y.shape[1]#len(y[0])
+		H = y.shape[1]
 	
 		begin = max(max(nb), max(na))
+		begin = max(begin, max(nonlinear))
+
 		#Regressores lineares
+
 		#regresoores de saída 
 		regY = np.zeros((ny, H - begin))
 		k = 0
@@ -184,9 +223,9 @@ class structureSelector:
 
 		#não lineares
 		for j in range(len(nonlinear)):
-			if nonlinear[j]:
-				for i in range(len(nb)):
-					regY = np.vstack((regY, functions[j](y[i][begin-1:-1])))
+			for i in range(len(nb)):
+				for k in range(0, nonlinear[j]):
+					regY = np.vstack((regY, functions[j](y[i][begin-(1 + k):-(1 + k)])))
 		#diferencial
 		if diff:
 			if dt == 0:
@@ -201,10 +240,6 @@ class structureSelector:
 		#integracao da saida
 		if intg:
 			iy = self.integrate(p=y, ts=dt)
-			'''
-			plt.plot(iy[:].T )
-			plt.show()
-			print(iy[:, begin:].shape, regY.shape)'''
 			regY = np.vstack((regY, iy[:, begin:]))
 
 		#regressores de entrada
@@ -216,9 +251,9 @@ class structureSelector:
 				k += 1
 
 		for j in range(len(nonlinear)):
-			if nonlinear[j]:
-				for i in range(len(na)):
-						regU = np.vstack((regU, functions[j](u[i][begin-1:-1])))
+			for i in range(len(na)):
+				for k in range(0, nonlinear[j]):
+						regU = np.vstack((regU, functions[j](u[i][begin-(1+k):-(1+k)])))
 		#diferencial
 		if diff:
 			if dt == 0:
@@ -317,14 +352,14 @@ class structureSelector:
 			Jold = np.mean(np.square(y - (P @ theta)))#J[l]
 		return P, selected
 
-	def predict(self, u, y, theta, model, nb, na, index, delay=0, diff=False, dt=0, intg=False):
+	def predict(self, u, y, theta, model, nb, na, index, delay=0, diff=False, dt=0, intg=False, nonlinear=[0,0,0,0,0,0,0,0,0], ymodifier=[0,0]):
 		#Condição inicial
 		print("Simulação livre")
 		d = max(max(na), max(nb))
 		d = max(d, delay)
+		d = max(d, max(nonlinear))
 
 		yest = np.zeros(y.shape)
-		#print('condições iniciais', yest[index, :d], y[index, :d])
 		yest[index, :d] = y[index, :d] #padding
 		if y.shape[0] > 1:
 			w = np.arange(0, y.shape[0], 1)
@@ -352,7 +387,7 @@ class structureSelector:
 
 
 		for i in range(u.shape[0]):
-			s += symbols('U'+str(i+1)+'.'+str(delay)+':{}'.format(na[i]+1))
+			s += symbols('U'+str(i+1)+'.'+str(1)+':{}'.format(na[i]+1))
 
 		if diff:
 			for i in range(na.shape[0]):
@@ -368,7 +403,7 @@ class structureSelector:
 			for i in range(1, d):
 				iu[:, i] = iu[:, i-1] + u[:, i] * dt
 		
-		print('--------s: ', s)
+		print('--------', s)
 		iy = 0
 		for k in range(d, y.shape[1]):
 			num = np.array([])
@@ -376,14 +411,13 @@ class structureSelector:
 				num = np.hstack((num, np.flip(yest[i, k-nb[i]:k])))
 			if diff:
 				dy = (yest[:, k-1] - yest[:, k-2]) / dt
-				#print(num.shape, dy.shape)
 				num = np.hstack((num, dy))
 			if intg:
 				iy = iy + yest[:, k-1] * dt
 				num = np.hstack((num, iy))
 
 			for i in range(u.shape[0]):
-				num = np.hstack((num, np.flip(u[i, k-na[i]:k-delay+1])))
+				num = np.hstack((num, np.flip(u[i, k-na[i]:k])))
 			if diff:
 				num = np.hstack((num, du[:, k]))
 			if intg:
@@ -391,11 +425,7 @@ class structureSelector:
 				num = np.hstack((num, iu[:, k]))
 
 			dicionario = dict(zip(s, num))
-			#print(dicionario)
-			#print(len(s), num.shape, k,  k-na[i], k-delay+1)
 			aux = np.array([1 if m == 1 else m.evalf(subs=dicionario) for m in model])
-			#print(aux)
-			#print(np.real(aux[-1]), type(aux[-1]))
 			try:
 				yest[index, k] = aux.real @ theta
 			except ValueError:
@@ -407,7 +437,7 @@ class structureSelector:
 				
 		return yest[index, :]
 	
-	def oneStepForward(self, u, y, theta, model, nb, na, index, diff=False, dt=0, intg=False):
+	def oneStepForward(self, u, y, theta, model, nb, na, index, diff=False, dt=0, intg=False, ymodifier=[0,0]):
 		#Condição inicial
 		#print("oneStepForward")
 		yest = np.zeros(y.shape)
@@ -475,32 +505,43 @@ class structureSelector:
 		return yest[index, :]
 
 #%%
-'''
-na = [2]
-nb = [2,2]
+'''na = [2]
+nb = [2]
 level = 2
 ss = structureSelector()
+ss.setLimits(-1, 1)
 d = 1
-s = ss.symbolic_regressors(nb, na, level, nonlinear=[0,0,0,0,0, 1], root=False, diff=False, delay=d, intg=True)
-pprint(s)
-print(len(s))
+s = ss.symbolic_regressors(nb, na, level, nonlinear=[0,0,0,0,0, 0,0,0,0], root=False, diff=False, delay=d, intg=False, ymodifier=[1,0])
+pprint(s)'''
+#print(len(s), s[2].evalf(subs={"Y1.1":6}))
 #%%
+'''
 na = [2]
-nb = [2,2]
+nb = [1]
+level = 1
 ss = structureSelector()
 #print(s[-1].evalf(subs={symbols('U1.1'):-3}))
-u = np.arange(0,1000,1).reshape((1,-1))/10
-y = np.zeros((2,1000))
-y[0] = np.sin(u)
-y[1] = 2*u
+t = np.arange(0,1000,1).reshape((1,-1))/10
+u = np.cos(t)
+#y = np.zeros((2,1000))
+#y[0] = np.sin(t)
+y = np.sin(t)
+#y[1] = 2*u
 dl = 1
-v = ss.matrix_candidate(u, y, nb, na, level, nonlinear=[0,0,0,0,0, 1, 1], root=False, diff=False, delay=dl, intg=True, dt=0.1)
-print(len(s), v.shape)
-#%%
-plt.plot(np.sin(u).T)
-plt.plot(-np.cos(u).T)
+v = ss.matrix_candidate(u, y, nb, na, level, nonlinear=[0,0,0,0,0, 0, 6], root=False, diff=False, delay=dl, intg=False, dt=0.1)
+s = ss.symbolic_regressors(nb, na, level, nonlinear=[0,0,0,0,0, 0, 6], root=False, diff=False, delay=dl, intg=False)
+pprint(s)
+plt.plot(v.T)
 plt.show()
+print(v.shape, len(s))'''
 #%%
+'''plt.plot(v[2, :100].T)
+plt.plot(v[5, :100].T)
+plt.plot(v[7, :100].T)
+plt.show()
+print(v.shape)'''
+#%%
+'''
 output = 0
 pad = max(max(na), max(nb))
 psi, selected  = ss.semp(v.T, y[output, pad:], 3, 0.00001)
