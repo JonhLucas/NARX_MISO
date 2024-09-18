@@ -63,7 +63,7 @@ class clip(Function):
 	@classmethod
 	def eval(cls, x):
 		if x.is_Number:
-			print(cls.m, cls.n)
+			#print(cls.m, cls.n)
 			return np.clip(x, cls.m, cls.n)
 	def __str__(self):
 		return f"c({self.args[0]})"
