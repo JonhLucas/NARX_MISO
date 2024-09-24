@@ -62,12 +62,28 @@ class clip(Function):
 
 	@classmethod
 	def eval(cls, x):
-		if x.is_Number:
+		#print('----------------clip--------------', type(x))
+		if isinstance(x, np.ndarray):
+			#print('array')
+			return np.clip(x, cls.m, cls.n)
+		elif x.is_Number:
 			#print(cls.m, cls.n)
 			return np.clip(x, cls.m, cls.n)
 	def __str__(self):
 		return f"c({self.args[0]})"
 		
+
+class sen(Function):
+	@classmethod
+	def eval(cls, x):
+		if isinstance(x, np.ndarray):
+			#print('array')
+			return np.sin(x)
+		elif x.is_Number:
+			return np.sin(x)
+		
+	def __str__(self):
+		return f"sin({self.args[0]})"
 
 class structureSelector:
 	def __init__(self):
@@ -354,7 +370,7 @@ class structureSelector:
 
 	def predict(self, u, y, theta, model, nb, na, index, delay=0, diff=False, dt=0, intg=False, nonlinear=[0,0,0,0,0,0,0,0,0], ymodifier=[0,0]):
 		#Condição inicial
-		print("Simulação livre")
+		#print("Simulação livre")
 		d = max(max(na), max(nb))
 		d = max(d, delay)
 		d = max(d, max(nonlinear))
@@ -403,7 +419,7 @@ class structureSelector:
 			for i in range(1, d):
 				iu[:, i] = iu[:, i-1] + u[:, i] * dt
 		
-		print('--------', s)
+		#print('--------', s)
 		iy = 0
 		for k in range(d, y.shape[1]):
 			num = np.array([])
@@ -503,7 +519,75 @@ class structureSelector:
 			#print(aux, dicionario, num.shape, len(s), nb, na)
 			yest[index, k] = aux @ theta
 		return yest[index, :]
+	
+	def oneStepForward2(self, u, y, theta, selected, nb, na, level, index, root=False, delay=0, diff=False, dt=0, intg=False, nonlinear=[0,0,0,0,0,0,0,0,0], ymodifier=[0,0]):
+		#Condição inicial
+		pad = max(max(nb), max(na))
+		pad = max(pad, max(nonlinear))
 
+		valCandidatos = self.matrix_candidate(u, y, nb, na, level, nonlinear, root, delay, diff, dt, intg, ymodifier)
+		#print(valCandidatos.shape)
+		Psi = valCandidatos[selected, :]
+
+		yest = np.zeros(y.shape[1], np.float64)
+		yest[:pad] = y[index, :pad]
+		yest[pad:] = Psi.T @ theta
+		return yest
+
+
+#%%
+
+#%%
+'''
+ui = np.reshape(u, (1, -1)).copy()
+yi = np.reshape(y, (1, -1)).copy()
+
+output = 0  
+num = [6]
+params = []
+params.append({'nb':[5],'na':[3], 'level':1, 'nonlinear':[3,0,0,0,0], 'root':False, 'delay':1, 'diff':False, 'ymodifier':[1,0]})
+
+sselector = structureSelector()
+clip.setLimit(-0.2, 0.2)
+ss = sselector.symbolic_regressors(**params[output], intg=False)
+
+vCandidatos = sselector.matrix_candidate(ui, yi, **params[output], dt=dt, intg=False)
+
+pad = max(max(params[output]['nb']), max(params[output]['na']))
+psi, selected  = sselector.semp(vCandidatos.T, yi[output, pad:], num[output], 1e-13)
+
+model = ss[selected]
+
+theta = LSM(yi[output, pad:], psi)
+print(model, theta, selected)
+
+def metrics(y, yest):
+    residuo1 = y - yest
+    mape = round(np.mean(np.abs(residuo1 / (yest + np.finfo(np.float64).eps))), 5)
+    plt.plot(np.abs(residuo1 / (yest + np.finfo(np.float64).eps)).T)
+    print('RMSE:', np.sqrt(np.mean(np.square(residuo1))), 'MSE:', np.mean(np.square(residuo1)), '\nAET:', np.sum(np.abs(residuo1)), '\nMAPE:', str(mape) + '%')
+
+model = ss[selected]
+model[-1] = model[-1]*model[-1]**2
+yhat1 = np.zeros(yi.shape[1])
+yhat1[5:] = psi @ theta
+yhat2 = sselector.oneStepForward(ui, yi, theta, model, params[output]['nb'], params[output]['na'], output, params[output]['diff'], dt=dt, intg=False)
+print("\nUm passo a frente")
+print(metrics(yi[0, 100:], yhat1[100:]))
+print(metrics(yi[0, 100:], yhat2[100:]))
+plt.show()
+
+#%%
+#my_data = np.genfromtxt('data/ballBeamTeste1.csv', delimiter=',')[1:,:]
+my_data = np.genfromtxt('data/ballBeamNoise.csv', delimiter=',')[1:,:]
+u = my_data[:, 0].copy()
+y = my_data[:, 1].copy() 
+t = my_data[:, -1].copy()
+
+np.random.seed(15)
+amplitude = 0.00001
+
+dt = my_data[1, -1]'''
 #%%
 '''na = [2]
 nb = [2]
@@ -556,3 +640,5 @@ t = ss.predict(u, y, theta, model, nb, na, index, diff=True, dt=0.1)
 #%%
 plt.plot(v[:,:100].T)
 plt.show()'''
+
+
