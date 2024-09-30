@@ -111,30 +111,34 @@ class structureSelector:
 	def regressors(self, size, n, symbol="", nl=[0,0,0,0,0,0,0,0,0], df=False, d=0, intg=False, ymodifier=[0,0]):
 		r = sp.zeros(1, size)
 		p = 0
+		modifier = [clip, sp.sqrt]
 		#Regressores lineares
 		for i in range(n.shape[0]):
 			for j in range(0, n[i]-d):
-				if ymodifier[0] == 0:
-					r[p+j] = sp.symbols(symbol+str(i+1)+"."+str(j+1+d))
-				else:
-					r[p+j] = clip(sp.symbols(symbol+str(i+1)+"."+str(j+1+d)))
+				aux = sp.symbols(symbol+str(i+1)+"."+str(j+1+d))
+
+				for k in range(len(ymodifier)):
+					if ymodifier[k]:
+						aux = modifier[k](aux)
+
+				r[p+j] = aux
 			p += n[i]-d
-		'''else:
-			print("y modificador")
-			for i in range(n.shape[0]):
-				for j in range(0, n[i]-d):
-					r[p+j] = clip(sp.symbols(symbol+str(i+1)+"."+str(j+1+d)))
-				p += n[i]-d'''
 
 		#Aplicação das funções não lineares
 		sNonlinear = []
 		for i in range(len(nl)):
 			for j in range(0, nl[i]):
-				if ymodifier[0] == 1:
+				sy = [sp.symbols(symbol + str(s+1) + "." + str(j+1)) for s in range(n.shape[0])]
+				for k in range(len(ymodifier)):
+					if ymodifier[k]:
+						sy = [modifier[k](s) for s in sy]
+				sy = [self.functions[i](s) for s in sy]
+				
+				sNonlinear = sNonlinear + sy
+				'''if ymodifier[0] == 1:
 					sNonlinear = sNonlinear + [self.functions[i](clip(sp.symbols(symbol + str(s+1) + "." + str(j+1)))) for s in range(n.shape[0])]
 				else:
-					sNonlinear = sNonlinear + [self.functions[i](sp.symbols(symbol + str(s+1) + "." + str(j+1))) for s in range(n.shape[0])]
-		
+					sNonlinear = sNonlinear + [self.functions[i](sp.symbols(symbol + str(s+1) + "." + str(j+1))) for s in range(n.shape[0])]'''
 		#Aplicação da derivada
 		ds = []
 		if df:
@@ -186,7 +190,14 @@ class structureSelector:
 	
 		if root:
 			r = []
-			r = r + [sqrtM(sp.symbols("Y" + str(s+1) + ".1")) for s in range(nb.shape[0])] + [sqrtM(sp.symbols("U" + str(s+1) + ".1")) for s in range(na.shape[0])]
+			for i in range(nb.shape[0]):
+				if nb[i]:
+					r = r + [sqrtM(sp.symbols("Y" + str(i+1) + ".1"))]
+
+			for i in range(na.shape[0]):
+				if na[i]:
+					r = r + [sqrtM(sp.symbols("U" + str(i+1) + ".1"))]
+			#r = r + [sqrtM(sp.symbols("Y" + str(s+1) + ".1")) for s in range(nb.shape[0])] + [sqrtM(sp.symbols("U" + str(s+1) + ".1")) for s in range(na.shape[0])]
 			final = np.hstack((final, r))
 			#print(r, final)
 	
@@ -216,6 +227,11 @@ class structureSelector:
 		def clipNumeric(x):
 			return np.clip(x, self.min, self.max)
 		
+		def sqrtNumeric(x):
+			x[x < 0] = 0
+			return np.sqrt(x)
+		
+		modifier = [clipNumeric, sqrtNumeric]
 		#conjunto de não linearidades
 		functions = [np.sin, np.cos, np.log, np.tanh, np.sign, tanh2Numeric, tanh5Numeric, tanh10Numeric, tanh05Numeric]
 	
@@ -237,11 +253,19 @@ class structureSelector:
 				regY[k] = y[i][begin-j:-j]
 				k += 1	
 
+		for i in range(len(ymodifier)):
+			if ymodifier[i]:
+				regY = modifier[i](regY)
+
 		#não lineares
 		for j in range(len(nonlinear)):
 			for i in range(len(nb)):
 				for k in range(0, nonlinear[j]):
-					regY = np.vstack((regY, functions[j](y[i][begin-(1 + k):-(1 + k)])))
+					arg = y[i][begin-(1 + k):-(1 + k)]
+					for l in range(len(ymodifier)):
+						if ymodifier[l]:
+							arg = modifier[l](arg)
+					regY = np.vstack((regY, functions[j](arg)))
 		#diferencial
 		if diff:
 			if dt == 0:
@@ -539,19 +563,26 @@ class structureSelector:
 
 #%%
 '''
+dt = 0.01
 ui = np.reshape(u, (1, -1)).copy()
 yi = np.reshape(y, (1, -1)).copy()
 
 output = 0  
 num = [6]
 params = []
-params.append({'nb':[5],'na':[3], 'level':1, 'nonlinear':[3,0,0,0,0], 'root':False, 'delay':1, 'diff':False, 'ymodifier':[1,0]})
+params.append({'nb':[2],'na':[1], 'level':2, 'nonlinear':[1,0,0,0,0], 'root':False, 'delay':1, 'diff':False, 'ymodifier':[1,1]})
 
 sselector = structureSelector()
+sselector.setLimits(-0.2, 0.2)
 clip.setLimit(-0.2, 0.2)
 ss = sselector.symbolic_regressors(**params[output], intg=False)
+print(ss)
 
 vCandidatos = sselector.matrix_candidate(ui, yi, **params[output], dt=dt, intg=False)
+plt.plot(vCandidatos[1])
+plt.plot(vCandidatos[4])
+plt.plot(yi[0])
+plt.show()
 
 pad = max(max(params[output]['nb']), max(params[output]['na']))
 psi, selected  = sselector.semp(vCandidatos.T, yi[output, pad:], num[output], 1e-13)
@@ -575,7 +606,7 @@ yhat2 = sselector.oneStepForward(ui, yi, theta, model, params[output]['nb'], par
 print("\nUm passo a frente")
 print(metrics(yi[0, 100:], yhat1[100:]))
 print(metrics(yi[0, 100:], yhat2[100:]))
-plt.show()
+plt.show()'''
 
 #%%
 #my_data = np.genfromtxt('data/ballBeamTeste1.csv', delimiter=',')[1:,:]
@@ -587,7 +618,7 @@ t = my_data[:, -1].copy()
 np.random.seed(15)
 amplitude = 0.00001
 
-dt = my_data[1, -1]'''
+dt = my_data[1, -1]
 #%%
 '''na = [2]
 nb = [2]
