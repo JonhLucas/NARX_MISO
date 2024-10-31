@@ -66,7 +66,6 @@ class clip(Function):
 	def __str__(self):
 		return f"c({self.args[0]})"
 		
-
 class sen(Function):
 	@classmethod
 	def eval(cls, x):
@@ -86,13 +85,19 @@ class fourthRoot(Function):
 				x = 0
 			return sp.root(x, 4)
 		return x**(sp.Rational(1, 4))
+	
+class abs(Function):
+	@classmethod
+	def eval(cls, x):
+		if x.is_Number:
+			return np.abs(x)
 
 class structureSelector:
 	def __init__(self):
 		self.min = -1
 		self.max = 1
 
-	functions = [sp.sin, sp.cos, sp.log, sp.tanh, sign, tanh2, tanh5, tanh10, tanh05, fourthRoot]
+	functions = [sp.sin, sp.cos, sp.log, sp.tanh, sign, tanh2, tanh5, tanh10, tanh05, fourthRoot, abs]
 	
 	def setLimits(self, min, max):
 		self.min = min
@@ -112,7 +117,7 @@ class structureSelector:
 	def regressors(self, size, n, symbol="", nl=[0,0,0,0,0,0,0,0,0, 0], df=False, d=0, intg=False, ymodifier=[0,0]):
 		r = sp.zeros(1, size)
 		p = 0
-		modifier = [clip, sp.sqrt]
+		modifier = [clip, sp.sqrt, abs]
 		#Regressores lineares
 		for i in range(n.shape[0]):
 			if n[i]:
@@ -195,7 +200,7 @@ class structureSelector:
 		if root:
 			r = []
 			for i in range(nb.shape[0]):
-				if nb[i]:
+				if nb[i] or True:
 					r = r + [sqrtM(sp.symbols("Y" + str(i+1) + ".1"))]
 
 			for i in range(na.shape[0]):
@@ -240,9 +245,9 @@ class structureSelector:
 			x[x < 0] = 0
 			return x**(1/4)
 		
-		modifier = [clipNumeric, sqrtNumeric]
+		modifier = [clipNumeric, sqrtNumeric, np.abs]
 		#conjunto de não linearidades
-		functions = [np.sin, np.cos, np.log, np.tanh, np.sign, tanh2Numeric, tanh5Numeric, tanh10Numeric, tanh05Numeric, fourthRoot]
+		functions = [np.sin, np.cos, np.log, np.tanh, np.sign, tanh2Numeric, tanh5Numeric, tanh10Numeric, tanh05Numeric, fourthRoot, np.abs]
 	
 		nx = np.sum(np.array(na) - delay)
 		ny = np.sum(nb)
@@ -624,7 +629,7 @@ print(metrics(yi[0, 100:], yhat2[100:]))
 plt.show()'''
 
 #%%
-#my_data = np.genfromtxt('data/ballBeamTeste1.csv', delimiter=',')[1:,:]
+'''#my_data = np.genfromtxt('data/ballBeamTeste1.csv', delimiter=',')[1:,:]
 my_data = np.genfromtxt('data/ballBeamNoise.csv', delimiter=',')[1:,:]
 u = my_data[:, 0].copy()
 y = my_data[:, 1].copy() 
@@ -633,7 +638,7 @@ t = my_data[:, -1].copy()
 np.random.seed(15)
 amplitude = 0.00001
 
-dt = my_data[1, -1]
+dt = my_data[1, -1]'''
 #%%
 '''na = [2]
 nb = [2]
